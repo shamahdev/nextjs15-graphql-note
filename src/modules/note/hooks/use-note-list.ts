@@ -1,6 +1,6 @@
 import { graphqlClient } from "@/lib/graphql/client";
 import { Note } from "@/lib/graphql/resolvers";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { gql } from "graphql-request";
 import { ChangeEvent, useState } from "react";
 
@@ -11,6 +11,16 @@ const Query = gql`
       title
       content
       created_at
+    }
+  }
+`;
+
+const MutationQuery = gql`
+  mutation createNote($title: String!, $content: String!) {
+    createNote(title: $title, content: $content) {
+      id
+      title
+      content
     }
   }
 `;
@@ -30,9 +40,30 @@ export function useNoteList() {
       await graphqlClient.request<{ notes: Note[] }>(Query, filter),
   });
 
-  const { data } = getNoteListQuery;
-  const hasMore = data?.notes?.length === filter.limit;
+  const { data, refetch } = getNoteListQuery;
+  const [showForm, setShowForm] = useState(false);
 
+  const createNoteMutation = useMutation({
+    mutationKey: ["create-note"],
+    mutationFn: async (variables: Pick<Note, "title" | "content">) =>
+      await graphqlClient.request<{ createNote: Note }>(
+        MutationQuery,
+        variables
+      ),
+    onSuccess: () => {
+      refetch().then(() => setShowForm(false));
+    },
+    onError: (error) => {
+      console.error(error);
+      setShowForm(false);
+    },
+  });
+
+  function saveNote(note: Pick<Note, "title" | "content">) {
+    createNoteMutation.mutate(note);
+  }
+
+  const hasMore = data?.notes?.length === filter.limit;
   function handleLoadMore() {
     setFilter((prev) => ({
       ...prev,
@@ -57,5 +88,8 @@ export function useNoteList() {
     hasMore,
     handleLoadMore,
     handleSearch,
+    showForm,
+    setShowForm,
+    saveNote,
   };
 }
